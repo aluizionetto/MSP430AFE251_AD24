@@ -1,10 +1,15 @@
-#include <msp430.h>				
 
 /**
- * blink.c
+ * Testes com Conversor AD24 Bits para MSP 430AFE251
+ *
+ * Autor: Aluizio d'Affonseca Netto
+ *
+ * Descrição: Le valor do conversor AD para tensões entre 0 e 600.0 mV, usando referência interna do microncontrolador (1.2V)
+ * Os valores convetidos são enviados pela serial.
+ *
  */
 
-
+#include <msp430.h>
 volatile unsigned int i;        // volatile to prevent optimization
 volatile unsigned char i2;
 unsigned long int ad_conv;
