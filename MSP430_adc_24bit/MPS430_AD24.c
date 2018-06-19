@@ -5,11 +5,14 @@
  * Autor: Aluizio d'Affonseca Netto
  *
  * Descrição: Le valor do conversor AD para tensões entre 0 e 600.0 mV, usando referência interna do microncontrolador (1.2V)
- * Os valores convetidos são enviados pela serial.
+ * Os valores convetidos são enviados pela serial e para display LCD 16x2 com Expansão de IO via 74H595
  *
  */
 
 #include <msp430.h>
+#include "Display.h"
+#include "delay.h"
+
 volatile unsigned int i;        // volatile to prevent optimization
 volatile unsigned char i2;
 unsigned long int ad_conv;
@@ -21,7 +24,7 @@ void SendTx(unsigned char data)
     U0TXBUF = data;
 }
 
-void SendTxString(unsigned char *s)
+void SendTxString(char *s)
 {
     while (*s != '\0')
         SendTx(*s++);
@@ -34,9 +37,38 @@ void SendTxHex(unsigned char d)
     SendTx(table_hex[d & 0x0F]);
 }
 
+void ConvertIntStr(long int num, char* str)
+{
+    char tmp_char;
+    unsigned int id = 0;
+    unsigned int idr = 0;
+    long int tmp;
+
+    if(num < 0)
+    {
+        num *= (-1);
+        str[id++] = ('-');
+    }
+
+    do
+    {
+        tmp = num;
+        num = num /10;
+        str[id++] = (tmp - num*10) + '0';
+    }while(num);
+
+    str[id--] = '\0';
+
+    while(idr < id) {
+        tmp_char = str[id];
+        str[id--]= str[idr];
+        str[idr++] = tmp_char;
+    }
+}
+
 void SendTxInt(long int num)
 {
-    unsigned char buf_tx[16];
+    char buf_tx[16];
     char tmp_char;
     unsigned int id = 0;
     unsigned int idr = 0;
@@ -69,7 +101,7 @@ void SendTxInt(long int num)
 void IniSerial(void)
 {
     //GPIO para serial
-    P1SEL = BIT3 + BIT4;                      // P1.4 = RXD, P1.3=TXD
+    P1SEL |= BIT3 + BIT4;                      // P1.4 = RXD, P1.3=TXD
     P1SEL2 &= ~(BIT3 + BIT4);
 
     //configura porta serial 9600
@@ -131,6 +163,9 @@ long int ReadAD24 (void)
 
 const float v_const = 3.57627889e-4;
 long int tensao = 0;
+char str_tensao[10];
+char str_tensao_d[3];
+
 void main(void)
 {
     //configura clock para valor calibrado em 8 MHz
@@ -143,26 +178,41 @@ void main(void)
     IniSerial();
     InitAD24();
 
+    lcd_init();
+    lcd_send_string("Conversor AD24");
+
     P1DIR |= 0x01;					// configure P1.0 as output
 
     while(1)
     {
         P1OUT ^= 0x01;			// toggle P1.0
 
-        for(i=100; i>0; i--)     // delay
-            __delay_cycles(8000);
+        delay_ms(100);
 
-        SendTxString("AD > ");
+        //le conversor AD
         ad_conv = ReadAD24();
         tensao = (long int)(v_const*(float)(ad_conv));
+        ConvertIntStr(tensao/10, str_tensao);
+        ConvertIntStr(tensao%10, str_tensao_d);
+
+        //Envia pela porta serial
+        SendTxString("AD > ");
         SendTxString(" ");
-        SendTxInt(tensao/10);
+        SendTxString(str_tensao);
         SendTxString(".");
-        SendTxInt(tensao%10);
+        SendTxString(str_tensao_d);
         SendTxString(" ");
         SendTxHex((ad_conv >> 16) & 0xFF);
         SendTxHex((ad_conv >> 8) & 0xFF);
         SendTxHex(ad_conv & 0xFF);
         SendTxString("\r\n");
+
+        //escreve no LCD
+        lcd_send_command(0xC0);
+        delay_ms(4);
+        lcd_send_string(str_tensao);
+        lcd_send_string(".");
+        lcd_send_string(str_tensao_d);
+        lcd_send_string("mV      ");
     }
 }
